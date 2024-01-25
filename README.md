@@ -1,6 +1,6 @@
 # Instale as dependências
 ```
-  npm install express mysql2 typescript @types/node @types/express @types/mysql2 ts-node --save
+  npm install express mysql2 typescript @types/node @types/express @types/mysql2 ts-node bcrypt @types/bcrypt --save
 ```
 
 # Passo 2: Configuração do TypeScript
@@ -124,6 +124,43 @@ class UserController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
+  async registerUser(req: Request, res: Response): Promise<void> {
+    const { name, email, password } = req.body;
+
+    try {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await connection.execute('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', [name, email, hashedPassword]);
+      res.json({ message: 'User registered successfully' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  async loginUser(req: Request, res: Response): Promise<void> {
+    const { email, password } = req.body;
+
+    try {
+      const [rows] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
+      if (rows.length === 0) {
+        res.status(401).json({ error: 'Invalid email or password' });
+        return;
+      }
+
+      const user = rows[0];
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+
+      if (isPasswordValid) {
+        res.json({ message: 'Login successful' });
+      } else {
+        res.status(401).json({ error: 'Invalid email or password' });
+      }
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }
 export default new UserController();
 ```
@@ -140,6 +177,8 @@ router.get('/users/:id', UserController.getUserById);
 router.post('/users', UserController.createUser);
 router.put('/users/:id', UserController.updateUser);
 router.delete('/users/:id', UserController.deleteUser);
+router.post('/register', UserController.registerUser);
+router.post('/login', UserController.loginUser);
 
 export default router;
 ```
